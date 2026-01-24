@@ -1,9 +1,11 @@
 import streamlit as st
 from passporteye import read_mrz
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import json
 import io
 from datetime import datetime
+import numpy as np
+import cv2
 
 # إعدادات الصفحة
 st.set_page_config(
@@ -11,6 +13,133 @@ st.set_page_config(
     page_icon="🛂",
     layout="wide"
 )
+
+# دالة لرسم فريم توجيهي على الصورة
+def draw_guide_frame(image, frame_type="passport"):
+    """رسم فريم توجيهي على الصورة"""
+    img_array = np.array(image)
+    height, width = img_array.shape[:2]
+    
+    # إنشاء نسخة من الصورة للرسم عليها
+    overlay = img_array.copy()
+    
+    if frame_type == "passport":
+        # فريم صفحة الجواز (مستطيل أفقي في المنتصف)
+        frame_height = int(height * 0.7)
+        frame_width = int(width * 0.85)
+        x1 = (width - frame_width) // 2
+        y1 = (height - frame_height) // 2
+        x2 = x1 + frame_width
+        y2 = y1 + frame_height
+        
+        # رسم إطار متقطع
+        dash_length = 20
+        gap_length = 10
+        
+        # الخطوط الأفقية
+        for x in range(x1, x2, dash_length + gap_length):
+            cv2.line(overlay, (x, y1), (min(x + dash_length, x2), y1), (102, 126, 234), 3)
+            cv2.line(overlay, (x, y2), (min(x + dash_length, x2), y2), (102, 126, 234), 3)
+        
+        # الخطوط العمودية
+        for y in range(y1, y2, dash_length + gap_length):
+            cv2.line(overlay, (x1, y), (x1, min(y + dash_length, y2)), (102, 126, 234), 3)
+            cv2.line(overlay, (x2, y), (x2, min(y + dash_length, y2)), (102, 126, 234), 3)
+        
+        # زوايا مميزة
+        corner_length = 40
+        cv2.line(overlay, (x1, y1), (x1 + corner_length, y1), (255, 215, 0), 5)
+        cv2.line(overlay, (x1, y1), (x1, y1 + corner_length), (255, 215, 0), 5)
+        cv2.line(overlay, (x2, y1), (x2 - corner_length, y1), (255, 215, 0), 5)
+        cv2.line(overlay, (x2, y1), (x2, y1 + corner_length), (255, 215, 0), 5)
+        cv2.line(overlay, (x1, y2), (x1 + corner_length, y2), (255, 215, 0), 5)
+        cv2.line(overlay, (x1, y2), (x1, y2 - corner_length), (255, 215, 0), 5)
+        cv2.line(overlay, (x2, y2), (x2 - corner_length, y2), (255, 215, 0), 5)
+        cv2.line(overlay, (x2, y2), (x2, y2 - corner_length), (255, 215, 0), 5)
+        
+    elif frame_type == "mrz":
+        # فريم منطقة MRZ (مستطيل أفقي في الأسفل)
+        frame_height = int(height * 0.25)
+        frame_width = int(width * 0.85)
+        x1 = (width - frame_width) // 2
+        y1 = height - frame_height - int(height * 0.1)
+        x2 = x1 + frame_width
+        y2 = y1 + frame_height
+        
+        # رسم إطار متقطع
+        dash_length = 15
+        gap_length = 8
+        
+        # الخطوط الأفقية
+        for x in range(x1, x2, dash_length + gap_length):
+            cv2.line(overlay, (x, y1), (min(x + dash_length, x2), y1), (46, 204, 113), 3)
+            cv2.line(overlay, (x, y2), (min(x + dash_length, x2), y2), (46, 204, 113), 3)
+        
+        # الخطوط العمودية
+        for y in range(y1, y2, dash_length + gap_length):
+            cv2.line(overlay, (x1, y), (x1, min(y + dash_length, y2)), (46, 204, 113), 3)
+            cv2.line(overlay, (x2, y), (x2, min(y + dash_length, y2)), (46, 204, 113), 3)
+        
+        # زوايا مميزة
+        corner_length = 50
+        cv2.line(overlay, (x1, y1), (x1 + corner_length, y1), (255, 69, 0), 6)
+        cv2.line(overlay, (x1, y1), (x1, y1 + corner_length), (255, 69, 0), 6)
+        cv2.line(overlay, (x2, y1), (x2 - corner_length, y1), (255, 69, 0), 6)
+        cv2.line(overlay, (x2, y1), (x2, y1 + corner_length), (255, 69, 0), 6)
+        cv2.line(overlay, (x1, y2), (x1 + corner_length, y2), (255, 69, 0), 6)
+        cv2.line(overlay, (x1, y2), (x1, y2 - corner_length), (255, 69, 0), 6)
+        cv2.line(overlay, (x2, y2), (x2 - corner_length, y2), (255, 69, 0), 6)
+        cv2.line(overlay, (x2, y2), (x2, y2 - corner_length), (255, 69, 0), 6)
+        
+        # إضافة خطوط توجيهية للسطرين
+        line1_y = y1 + int(frame_height * 0.35)
+        line2_y = y1 + int(frame_height * 0.65)
+        cv2.line(overlay, (x1 + 20, line1_y), (x2 - 20, line1_y), (52, 152, 219), 2)
+        cv2.line(overlay, (x1 + 20, line2_y), (x2 - 20, line2_y), (52, 152, 219), 2)
+    
+    # دمج الصورة الأصلية مع الفريم
+    alpha = 0.7
+    result = cv2.addWeighted(overlay, alpha, img_array, 1 - alpha, 0)
+    
+    return Image.fromarray(result)
+
+# دالة لقص منطقة MRZ من الصورة
+def crop_mrz_region(image):
+    """قص منطقة MRZ من الصورة"""
+    img_array = np.array(image)
+    height, width = img_array.shape[:2]
+    
+    # تحديد منطقة MRZ (الربع السفلي من الصورة تقريباً)
+    mrz_height = int(height * 0.35)
+    y_start = height - mrz_height
+    
+    # قص المنطقة
+    cropped = img_array[y_start:height, :]
+    
+    return Image.fromarray(cropped)
+
+# دالة لتحسين جودة صورة MRZ
+def enhance_mrz_image(image):
+    """تحسين جودة صورة MRZ للقراءة الأفضل"""
+    img_array = np.array(image)
+    
+    # تحويل لرمادي
+    if len(img_array.shape) == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img_array
+    
+    # تطبيق فلتر لتقليل الضوضاء
+    denoised = cv2.fastNlMeansDenoising(gray)
+    
+    # تحسين التباين
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    enhanced = clahe.apply(denoised)
+    
+    # تطبيق threshold لتحسين الوضوح
+    _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    return Image.fromarray(binary)
 
 # دالة لتنسيق التاريخ
 def format_date(date_str):
@@ -21,9 +150,8 @@ def format_date(date_str):
         yy = int(date_str[0:2])
         mm = date_str[2:4]
         dd = date_str[4:6]
-        # تحديد القرن (19xx أو 20xx)
         current_year = datetime.now().year % 100
-        if yy > current_year + 10:  # إذا كان في المستقبل البعيد، يكون 19xx
+        if yy > current_year + 10:
             yyyy = 1900 + yy
         else:
             yyyy = 2000 + yy
@@ -37,33 +165,11 @@ def format_name(names, surname):
     if not names and not surname:
         return "غير متوفر"
     
-    # تنظيف الاسماء
     names_clean = names.replace('<', ' ').strip() if names else ""
     surname_clean = surname.replace('<', ' ').strip() if surname else ""
-    
-    # دمج الاسم الكامل
     full_name = f"{names_clean} {surname_clean}".strip()
     
     return full_name if full_name else "غير متوفر"
-
-# دالة لإنشاء إطار الكاميرا
-def create_camera_guide():
-    """إنشاء صورة إرشادية لإطار الكاميرا"""
-    st.markdown("""
-    <div style='position: relative; text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-bottom: 20px;'>
-        <h3 style='color: white; margin: 0;'>📷 ضع جواز السفر داخل الإطار</h3>
-        <p style='color: white; margin: 10px 0 0 0; font-size: 14px;'>تأكد من ظهور منطقة MRZ (السطور السفلية) بوضوح</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # إرشادات التصوير
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("✅ **إضاءة جيدة**")
-    with col2:
-        st.markdown("✅ **بدون ظلال**")
-    with col3:
-        st.markdown("✅ **MRZ واضح**")
 
 # CSS مخصص لتحسين المظهر
 st.markdown("""
@@ -122,18 +228,29 @@ st.markdown("""
         background-color: #f8d7da;
         color: #721c24;
     }
-    .camera-frame {
-        border: 3px dashed #667eea;
-        border-radius: 10px;
-        padding: 10px;
-        background-color: rgba(102, 126, 234, 0.1);
+    .guide-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 15px;
+        color: white;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .step-indicator {
+        display: inline-block;
+        background: white;
+        color: #667eea;
+        padding: 10px 20px;
+        border-radius: 25px;
+        font-weight: bold;
+        margin: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # العنوان الرئيسي
 st.title("🛂 قارئ بيانات جواز السفر")
-st.markdown("**استخراج ذكي لبيانات جواز السفر باستخدام تقنية MRZ**")
+st.markdown("**استخراج ذكي لبيانات جواز السفر باستخدام تقنية MRZ مع فريمات توجيهية**")
 
 # شريط جانبي للمعلومات
 with st.sidebar:
@@ -141,7 +258,10 @@ with st.sidebar:
     st.info("""
     هذا التطبيق يقرأ منطقة MRZ 
     (Machine Readable Zone) 
-    من صور جوازات السفر
+    من صور جوازات السفر مع:
+    • فريمات توجيهية للتصوير
+    • قص تلقائي لمنطقة MRZ
+    • تحسين جودة الصورة
     """)
     
     st.header("📊 مقياس الدقة")
@@ -151,30 +271,40 @@ with st.sidebar:
     
     st.markdown("---")
     
-    st.header("🎯 نصائح للحصول على أفضل نتيجة")
+    st.header("🎯 خطوات التصوير")
     st.markdown("""
-    - استخدم إضاءة طبيعية
-    - تجنب الظلال والانعكاسات
-    - ضع الجواز على سطح مستوٍ
-    - تأكد من وضوح السطرين السفليين
-    - لا تقص أي جزء من MRZ
+    **الخطوة 1: صفحة الجواز** 🟦
+    - ضع الجواز داخل الإطار الأزرق
+    - تأكد من ظهور كامل الصفحة
+    
+    **الخطوة 2: منطقة MRZ** 🟢
+    - ركز على الإطار الأخضر
+    - السطران السفليان واضحان
+    
+    **نصائح:**
+    - إضاءة طبيعية جيدة
+    - بدون ظلال أو انعكاسات
+    - سطح مستوٍ
+    - كاميرا مستقرة
     """)
     
     st.markdown("---")
-    st.caption("💻 PassportEye Engine")
+    st.caption("💻 PassportEye + OpenCV")
 
-# خيارات إدخال الصورة
-st.subheader("📸 طريقة إدخال الصورة")
+# اختيار وضع التصوير
+st.markdown("---")
+st.subheader("📸 وضع التصوير")
 
-input_method = st.radio(
-    "اختر المصدر:",
-    ["📁 رفع من المعرض", "📷 التقاط من الكاميرا"],
-    horizontal=True
+capture_mode = st.radio(
+    "اختر الوضع:",
+    ["🔵 تصوير صفحة الجواز كاملة", "🟢 تصوير منطقة MRZ فقط", "📁 رفع صورة جاهزة"],
+    horizontal=False
 )
 
 uploaded_file = None
+show_guide = False
 
-if input_method == "📁 رفع من المعرض":
+if capture_mode == "📁 رفع صورة جاهزة":
     uploaded_file = st.file_uploader(
         "اختر صورة جواز السفر",
         type=['jpg', 'jpeg', 'png', 'bmp'],
@@ -185,13 +315,49 @@ if input_method == "📁 رفع من المعرض":
         st.success("✅ تم رفع الصورة بنجاح!")
 
 else:
-    # عرض إرشادات الكاميرا
-    create_camera_guide()
+    # عرض إرشادات حسب الوضع
+    if capture_mode == "🔵 تصوير صفحة الجواز كاملة":
+        st.markdown("""
+        <div class="guide-box">
+            <h3>🔵 الخطوة 1: تصوير صفحة الجواز</h3>
+            <p>ضع جواز السفر داخل <strong>الإطار الأزرق المتقطع</strong></p>
+            <p>تأكد من ظهور كامل الصفحة بما فيها منطقة MRZ السفلية</p>
+            <div class="step-indicator">الزوايا الذهبية تساعدك في المحاذاة</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="guide-box">
+            <h3>🟢 الخطوة 2: تصوير منطقة MRZ</h3>
+            <p>ركز على <strong>الإطار الأخضر</strong> في أسفل الصورة</p>
+            <p>السطران السفليان يجب أن يكونا بين <strong>الخطوط الزرقاء التوجيهية</strong></p>
+            <div class="step-indicator">الزوايا البرتقالية للمحاذاة الدقيقة</div>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # إطار الكاميرا
-    st.markdown('<div class="camera-frame">', unsafe_allow_html=True)
-    camera_image = st.camera_input("📸 التقط صورة واضحة لجواز السفر")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # عرض معاينة الفريم
+    col_preview1, col_preview2 = st.columns(2)
+    
+    with col_preview1:
+        st.markdown("**🔵 مثال: فريم صفحة الجواز**")
+        # إنشاء صورة توضيحية
+        sample_img = Image.new('RGB', (400, 250), color=(240, 240, 240))
+        sample_with_frame = draw_guide_frame(sample_img, "passport")
+        st.image(sample_with_frame, use_container_width=True)
+    
+    with col_preview2:
+        st.markdown("**🟢 مثال: فريم منطقة MRZ**")
+        sample_img2 = Image.new('RGB', (400, 250), color=(240, 240, 240))
+        sample_with_frame2 = draw_guide_frame(sample_img2, "mrz")
+        st.image(sample_with_frame2, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # زر عرض الفريمات
+    show_guide = st.checkbox("🎯 عرض الفريمات التوجيهية أثناء التصوير", value=True)
+    
+    # كاميرا التصوير
+    camera_image = st.camera_input("📸 التقط الصورة الآن")
     
     if camera_image is not None:
         uploaded_file = camera_image
@@ -200,74 +366,98 @@ else:
 # معالجة الصورة
 if uploaded_file is not None:
     
-    # عرض الصورة
     st.markdown("---")
-    col1, col2 = st.columns([1, 1])
+    st.subheader("🔄 معالجة الصورة")
+    
+    # قراءة الصورة
+    image = Image.open(uploaded_file)
+    
+    # عرض الصورة الأصلية
+    col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        st.subheader("📷 الصورة المُدخلة")
-        image = Image.open(uploaded_file)
+        st.markdown("**📷 الصورة الأصلية**")
         st.image(image, use_container_width=True)
-        
-        # زر المعالجة
-        process_button = st.button("🔍 استخراج البيانات الآن", type="primary", use_container_width=True)
+    
+    # قص منطقة MRZ
+    with st.spinner("✂️ جاري قص منطقة MRZ..."):
+        mrz_cropped = crop_mrz_region(image)
     
     with col2:
-        if process_button:
-            with st.spinner("⏳ جاري معالجة الصورة وقراءة البيانات..."):
-                try:
-                    # إعادة فتح الملف للقراءة
-                    uploaded_file.seek(0)
-                    mrz = read_mrz(uploaded_file)
-                    
-                    if mrz is None:
-                        st.error("❌ لم يتم العثور على منطقة MRZ في الصورة!")
-                        st.warning("""
-                        **يرجى التأكد من:**
-                        - الصورة واضحة وذات جودة عالية
-                        - السطران السفليان (MRZ) ظاهران بالكامل
-                        - لا توجد ظلال على منطقة MRZ
-                        - الصورة غير مائلة
-                        """)
-                    else:
-                        mrz_data = mrz.to_dict()
-                        
-                        # عرض درجة الدقة
-                        valid_score = mrz_data.get('valid_score', 0)
-                        
-                        if valid_score >= 80:
-                            emoji = "🎉"
-                            status = "ممتازة"
-                            color = "#28a745"
-                        elif valid_score >= 50:
-                            emoji = "👍"
-                            status = "جيدة"
-                            color = "#ffc107"
-                        else:
-                            emoji = "⚠️"
-                            status = "ضعيفة"
-                            color = "#dc3545"
-                        
-                        st.markdown(f"""
-                        <div class="big-metric">
-                            <p>{emoji} دقة الاستخراج</p>
-                            <h1>{valid_score}%</h1>
-                            <p>الحالة: {status}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # حفظ البيانات في session state
-                        st.session_state['mrz_data'] = mrz_data
-                        st.session_state['processed'] = True
-                        
-                except Exception as e:
-                    st.error(f"❌ حدث خطأ: {str(e)}")
-                    st.info("""
-                    💡 **جرب:**
-                    - التقاط صورة جديدة بإضاءة أفضل
+        st.markdown("**✂️ منطقة MRZ المقصوصة**")
+        st.image(mrz_cropped, use_container_width=True)
+    
+    # تحسين الصورة
+    with st.spinner("✨ جاري تحسين جودة الصورة..."):
+        mrz_enhanced = enhance_mrz_image(mrz_cropped)
+    
+    with col3:
+        st.markdown("**✨ بعد التحسين**")
+        st.image(mrz_enhanced, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # زر المعالجة
+    process_button = st.button("🔍 استخراج البيانات الآن", type="primary", use_container_width=True)
+    
+    if process_button:
+        with st.spinner("⏳ جاري قراءة البيانات من MRZ..."):
+            try:
+                # حفظ الصورة المحسنة في buffer
+                img_buffer = io.BytesIO()
+                mrz_enhanced.save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                # قراءة MRZ
+                mrz = read_mrz(img_buffer)
+                
+                if mrz is None:
+                    st.error("❌ لم يتم العثور على منطقة MRZ في الصورة!")
+                    st.warning("""
+                    **يرجى المحاولة مرة أخرى مع:**
+                    - تصوير أوضح لمنطقة MRZ
+                    - إضاءة أفضل
+                    - تجنب الظلال
                     - التأكد من استقرار الكاميرا
-                    - استخدام صورة بدقة أعلى
                     """)
+                else:
+                    mrz_data = mrz.to_dict()
+                    
+                    # عرض درجة الدقة
+                    valid_score = mrz_data.get('valid_score', 0)
+                    
+                    if valid_score >= 80:
+                        emoji = "🎉"
+                        status = "ممتازة"
+                    elif valid_score >= 50:
+                        emoji = "👍"
+                        status = "جيدة"
+                    else:
+                        emoji = "⚠️"
+                        status = "ضعيفة"
+                    
+                    st.markdown(f"""
+                    <div class="big-metric">
+                        <p>{emoji} دقة الاستخراج</p>
+                        <h1>{valid_score}%</h1>
+                        <p>الحالة: {status}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # حفظ البيانات في session state
+                    st.session_state['mrz_data'] = mrz_data
+                    st.session_state['processed'] = True
+                    st.session_state['mrz_image'] = mrz_enhanced
+                    
+            except Exception as e:
+                st.error(f"❌ حدث خطأ: {str(e)}")
+                st.info("""
+                💡 **اقتراحات:**
+                - جرب وضع التصوير الآخر
+                - تأكد من وضوح السطرين السفليين
+                - استخدم إضاءة أفضل
+                - تجنب الانعكاسات على الجواز
+                """)
     
     # عرض البيانات المستخرجة
     if st.session_state.get('processed', False):
@@ -282,7 +472,7 @@ if uploaded_file is not None:
         expiry_date = format_date(mrz_data.get('expiration_date'))
         passport_number = mrz_data.get('number', '').replace('<', '').strip()
         
-        # البيانات الرئيسية في بطاقات كبيرة
+        # البيانات الرئيسية
         main_col1, main_col2 = st.columns(2)
         
         with main_col1:
@@ -368,27 +558,10 @@ if uploaded_file is not None:
         
         st.markdown(validity_html, unsafe_allow_html=True)
         
-        # البيانات التفصيلية
+        # عرض صورة MRZ المستخدمة
         st.markdown("---")
-        with st.expander("📊 عرض جميع البيانات التفصيلية"):
-            detail_col1, detail_col2 = st.columns(2)
-            
-            with detail_col1:
-                st.markdown("**أرقام التحقق:**")
-                st.write(f"• رقم التحقق: `{mrz_data.get('check_number', 'N/A')}`")
-                st.write(f"• تحقق تاريخ الميلاد: `{mrz_data.get('check_date_of_birth', 'N/A')}`")
-                st.write(f"• تحقق تاريخ الانتهاء: `{mrz_data.get('check_expiration_date', 'N/A')}`")
-                st.write(f"• التحقق المركب: `{mrz_data.get('check_composite', 'N/A')}`")
-                st.write(f"• تحقق الرقم الشخصي: `{mrz_data.get('check_personal_number', 'N/A')}`")
-            
-            with detail_col2:
-                st.markdown("**معلومات تقنية:**")
-                st.write(f"• طريقة المعالجة: `{mrz_data.get('method', 'N/A')}`")
-                st.write(f"• الرقم الشخصي: `{mrz_data.get('personal_number', 'N/A')}`")
-                st.write(f"• اسم الملف: `{mrz_data.get('filename', 'N/A')}`")
-            
-            st.markdown("---")
-            st.json(mrz_data)
+        with st.expander("🔍 عرض صورة MRZ المستخدمة في القراءة"):
+            st.image(st.session_state.get('mrz_image'), caption="صورة MRZ بعد القص والتحسين", use_container_width=True)
         
         # أزرار التحميل
         st.markdown("---")
@@ -453,10 +626,15 @@ else:
     with welcome_col2:
         st.markdown("""
         <div style='text-align: center; padding: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; color: white;'>
-            <h2>👋 مرحباً بك في قارئ جوازات السفر</h2>
+            <h2>👋 مرحباً بك في قارئ جوازات السفر المطور</h2>
             <p style='font-size: 18px; margin-top: 20px;'>
-                اختر طريقة إدخال الصورة من الأعلى للبدء
+                اختر وضع التصوير من الأعلى للبدء
             </p>
+            <div style='margin-top: 20px;'>
+                <span class="step-indicator">فريمات توجيهية ذكية 🎯</span>
+                <span class="step-indicator">قص تلقائي لـ MRZ ✂️</span>
+                <span class="step-indicator">تحسين الجودة ✨</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -464,30 +642,82 @@ else:
         
         # خطوات الاستخدام
         st.markdown("""
-        ### 📝 كيفية الاستخدام:
+        ### 📝 الميزات الجديدة:
         
-        1. **اختر مصدر الصورة** 📸
-           - رفع من المعرض
-           - التقاط من الكاميرا (مع إطار إرشادي)
+        #### 🎯 **فريمات توجيهية ذكية**
+        - 🔵 **الإطار الأزرق**: لتصوير صفحة الجواز كاملة
+        - 🟢 **الإطار الأخضر**: للتركيز على منطقة MRZ
+        - 🟡 **زوايا ذهبية/برتقالية**: للمحاذاة الدقيقة
+        - 🔵 **خطوط توجيهية**: لضبط موضع السطرين
         
-        2. **تأكد من وضوح MRZ** 🔍
-           - السطران السفليان يجب أن يكونا واضحين
-           - بدون ظلال أو انعكاسات
+        #### ✂️ **قص تلقائي ذكي**
+        - استخراج منطقة MRZ تلقائياً من الصورة
+        - تقليل حجم البيانات المعالجة
+        - تحسين دقة القراءة
         
-        3. **اضغط على زر الاستخراج** ⚡
-           - سيتم معالجة الصورة تلقائياً
-           - ستظهر النتائج بشكل منسق
+        #### ✨ **تحسين جودة متقدم**
+        - تقليل الضوضاء في الصورة
+        - تحسين التباين والوضوح
+        - معالجة الصورة للقراءة المثلى
         
-        4. **احفظ البيانات** 💾
-           - حمّل بصيغة JSON أو TXT
+        #### 📊 **معاينة مراحل المعالجة**
+        - عرض الصورة الأصلية
+        - عرض المنطقة المقصوصة
+        - عرض الصورة بعد التحسين
+        
+        ---
+        
+        ### 🚀 كيفية الاستخدام:
+        
+        **الطريقة الأولى (موصى بها):**
+        1. اختر "🔵 تصوير صفحة الجواز كاملة"
+        2. ضع الجواز داخل الإطار الأزرق
+        3. التقط الصورة
+        4. سيتم قص وتحسين MRZ تلقائياً
+        
+        **الطريقة الثانية:**
+        1. اختر "🟢 تصوير منطقة MRZ فقط"
+        2. ركز على الإطار الأخضر
+        3. اجعل السطرين بين الخطوط الزرقاء
+        4. التقط الصورة
+        
+        **الطريقة الثالثة:**
+        1. اختر "📁 رفع صورة جاهزة"
+        2. ارفع صورة من المعرض
+        3. سيتم المعالجة تلقائياً
+        
+        ---
+        
+        ### 💡 نصائح للحصول على أفضل نتيجة:
+        
+        ✅ **إضاءة:**
+        - استخدم إضاءة طبيعية أو مصباح أبيض
+        - تجنب الإضاءة الصفراء
+        - لا تستخدم الفلاش مباشرة
+        
+        ✅ **وضعية الجواز:**
+        - ضعه على سطح مستوٍ
+        - تجنب الميلان أو الانحناء
+        - لا تقطع أي جزء من MRZ
+        
+        ✅ **الكاميرا:**
+        - امسك الهاتف بثبات
+        - صور من مسافة مناسبة (20-30 سم)
+        - تأكد من الوضوح قبل الالتقاط
+        
+        ✅ **البيئة:**
+        - تجنب الظلال على الجواز
+        - لا تصور في مكان مظلم
+        - تجنب الانعكاسات اللامعة
         """)
 
 # تذييل
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #7f8c8d; padding: 20px;'>
-    <p>💻 تم التطوير باستخدام Streamlit و PassportEye</p>
+    <p>💻 تم التطوير باستخدام Streamlit + PassportEye + OpenCV</p>
+    <p>🎯 مع فريمات توجيهية ذكية وقص تلقائي لـ MRZ</p>
     <p>🔒 جميع البيانات تتم معالجتها محلياً - لا يتم حفظ أي معلومات</p>
-    <p style='font-size: 12px; margin-top: 10px;'>© 2024 MRZ Reader - All Rights Reserved</p>
+    <p style='font-size: 12px; margin-top: 10px;'>© 2024 MRZ Reader Pro - All Rights Reserved</p>
 </div>
 """, unsafe_allow_html=True)
