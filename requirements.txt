@@ -1,3 +1,6 @@
 streamlit
 passporteye
 Pillow
+opencv-python
+numpy
+pytesseract
